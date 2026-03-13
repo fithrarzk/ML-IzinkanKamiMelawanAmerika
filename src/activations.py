@@ -39,7 +39,7 @@ class Softmax(Activation):
         batch, n = S.shape
         J = -np.einsum('bi,bj->bij', S, S)
         J[:, np.arange(n), np.arange(n)] += S
-        return J   # (batch, n, n)
+        return J
 
 
 ACTIVATIONS = {
