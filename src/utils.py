@@ -154,7 +154,7 @@ def run_architecture_experiments(
             "lr": lr,
         }
 
-        print(f"\n✓ {exp_name} - Test Loss: {test_loss:.4f}, Accuracy: {accuracy:.4f}")
+        print(f"\n{exp_name} - Test Loss: {test_loss:.4f}, Accuracy: {accuracy:.4f}")
 
     return results
 
@@ -220,7 +220,7 @@ def run_learning_rate_experiments(
             "lr": lr,
         }
 
-        print(f"\n✓ {exp_name} - Test Loss: {test_loss:.4f}, Accuracy: {accuracy:.4f}")
+        print(f"\n{exp_name} - Test Loss: {test_loss:.4f}, Accuracy: {accuracy:.4f}")
 
     return results
 
