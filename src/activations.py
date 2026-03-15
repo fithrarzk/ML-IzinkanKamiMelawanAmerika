@@ -18,7 +18,6 @@ class ReLU(Activation):
     def forward(self, Z: Tensor) -> Tensor:
         # Rumus ReLU: max(0, Z)
         # akalin pake mask boolean: kalo > 0 jadi 1, sisanya 0
-        import numpy as np
         mask = Tensor((Z.data > 0).astype(float))
         return Z * mask
 
