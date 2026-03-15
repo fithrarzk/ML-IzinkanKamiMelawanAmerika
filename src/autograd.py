@@ -95,6 +95,26 @@ class Value:
         out._backward = _backward
         return out
 
+    def leaky_relu(self, alpha=0.01):
+        val = self.data if self.data > 0 else alpha * self.data
+        out = Value(val, (self,), f"leaky_relu({alpha})")
+
+        def _backward():
+            self.grad += (1.0 if self.data > 0 else alpha) * out.grad
+
+        out._backward = _backward
+        return out
+
+    def elu(self, alpha=1.0):
+        val = self.data if self.data > 0 else alpha * (np.exp(self.data) - 1)
+        out = Value(val, (self,), f"elu({alpha})")
+
+        def _backward():
+            self.grad += (1.0 if self.data > 0 else out.data + alpha) * out.grad
+
+        out._backward = _backward
+        return out
+
     def tanh(self):
         val = np.tanh(self.data)
         out = Value(val, (self,), "tanh")
@@ -326,6 +346,40 @@ class Tensor:
             if self.requires_grad:
                 self._ensure_grad()
                 self.grad += mask * out.grad
+
+        out._backward = _backward
+        return out
+
+    def leaky_relu(self, alpha=0.01):
+        mask_pos = (self.data > 0).astype(np.float64)
+        mask_neg = (self.data <= 0).astype(np.float64)
+        val = (self.data * mask_pos) + (alpha * self.data * mask_neg)
+        out = Tensor(val, _children=(self,), _op=f"leaky_relu({alpha})")
+
+        def _backward():
+            out._ensure_grad()
+            if self.requires_grad:
+                self._ensure_grad()
+                grad_mix = mask_pos + (alpha * mask_neg)
+                self.grad += grad_mix * out.grad
+
+        out._backward = _backward
+        return out
+
+    def elu(self, alpha=1.0):
+        mask_pos = (self.data > 0).astype(np.float64)
+        mask_neg = (self.data <= 0).astype(np.float64)
+        val = (self.data * mask_pos) + (alpha * (np.exp(np.clip(self.data, -500, 0)) - 1) * mask_neg)
+        out = Tensor(val, _children=(self,), _op=f"elu({alpha})")
+
+        def _backward():
+            out._ensure_grad()
+            if self.requires_grad:
+                self._ensure_grad()
+                # Gradient of ELU: 1 if x > 0 else (alpha * exp(x)) yang sama dgn (elu(x) + alpha)
+                grad_neg = (val + alpha) * mask_neg
+                grad_mix = mask_pos + grad_neg
+                self.grad += grad_mix * out.grad
 
         out._backward = _backward
         return out

@@ -113,6 +113,24 @@ p6 = run_check("Deep ReLU (layer 1)", model_deep, X_deep, y_deep, layer_idx=1)
 p7 = run_check("Deep ReLU (layer 2)", model_deep, X_deep, y_deep, layer_idx=2)
 
 # ──────────────────────────────────────────────────────────
+# Model 4: Bonus Features (LeakyReLU, ELU, Xavier, He)
+# ──────────────────────────────────────────────────────────
+np.random.seed(3)
+X_bonus = np.random.randn(12, 3) * 0.3
+y_bonus = np.random.randn(12, 1)
+
+model_bonus = FFNN([
+    {"n_in": 3, "n_out": 4, "activation": "leaky_relu", "init_method": "he"},
+    {"n_in": 4, "n_out": 4, "activation": "elu",        "init_method": "xavier"},
+    {"n_in": 4, "n_out": 1, "activation": "linear",     "init_method": "he"},
+])
+model_bonus.compile(loss="mse", lr=0.01)
+
+p8  = run_check("Bonus Features (layer 0: LeakyReLU + He)", model_bonus, X_bonus, y_bonus, layer_idx=0)
+p9  = run_check("Bonus Features (layer 1: ELU + Xavier)",   model_bonus, X_bonus, y_bonus, layer_idx=1)
+p10 = run_check("Bonus Features (layer 2: Linear + He)",    model_bonus, X_bonus, y_bonus, layer_idx=2)
+
+# ──────────────────────────────────────────────────────────
 # Tes Training — loss harus turun
 # ──────────────────────────────────────────────────────────
 print(f"\n{'='*60}")
@@ -134,7 +152,7 @@ print(f"  loss: {h['train_loss'][0]:.4f} → {h['train_loss'][-1]:.4f}  {status}
 # ──────────────────────────────────────────────────────────
 # Rekap
 # ──────────────────────────────────────────────────────────
-all_pass = all([p1, p2, p3, p4, p5, p6, p7, p_train])
+all_pass = all([p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p_train])
 print(f"\n{'='*60}")
 print(f"  HASIL KESELURUHAN: {'✓ SEMUA LULUS' if all_pass else '✗ ADA YANG GAGAL'}")
 print(f"{'='*60}\n")
