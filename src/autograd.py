@@ -216,8 +216,10 @@ class Tensor:
         else:
             self.data = np.array(data, dtype=np.float64)
 
-        self.requires_grad = requires_grad
-        self.grad = np.zeros_like(self.data) if requires_grad else None
+        self.requires_grad = requires_grad or any(
+            getattr(child, 'requires_grad', False) for child in _children
+        )
+        self.grad = np.zeros_like(self.data) if self.requires_grad else None
         self._backward = lambda: None
         self._prev = set(_children)
         self._op = _op

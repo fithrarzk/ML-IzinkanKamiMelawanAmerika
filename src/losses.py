@@ -77,7 +77,7 @@ class BCE(Loss):
                 _y_pred._ensure_grad()
                 pv = np.clip(_y_pred.data, _EPS, 1 - _EPS)
                 dL = (-((_y_true / pv) - (1 - _y_true) / (1 - pv))) / _y_pred.data.shape[0]
-                _y_pred.grad += out.grad * dL
+                _y_pred.grad += bce_out_grad_ref[0] * dL
 
         # Tambahkan y_pred sebagai child dari out dengan custom backward
         real_out = Tensor(out.data, _children=(_y_pred,), _op="bce")
