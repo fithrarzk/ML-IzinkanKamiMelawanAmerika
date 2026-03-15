@@ -1,15 +1,3 @@
-"""
-ffnn.py — Feed-Forward Neural Network berbasis Autograd
-
-Perubahan utama dari versi sebelumnya:
-  - forward() mengonversi input X menjadi Tensor dan mengembalikan Tensor
-  - backward() memanggil loss.backward() sehingga gradien menyebar otomatis
-    ke seluruh computational graph (ke semua W dan b di setiap layer)
-  - zero_grad() mereset semua gradien sebelum tiap batch
-  - update_weights() membaca .grad dari Tensor W dan b (sudah diisi oleh autograd)
-  - loss_fn.forward() sekarang mengembalikan Tensor (bukan float)
-"""
-
 import numpy as np
 from autograd import Tensor
 from layer import DenseLayer
@@ -48,10 +36,7 @@ class FFNN:
         is_softmax = last.activation.__class__.__name__.lower() == "softmax"
         last.is_softmax_output = is_cce and is_softmax
 
-    # ------------------------------------------------------------------
-    # Regularisasi
-    # ------------------------------------------------------------------
-
+    #regularisasi
     def _reg_penalty(self) -> float:
         reg = self.regularization.lower()
         if reg == "l2":
@@ -60,42 +45,22 @@ class FFNN:
             return self.lambda_ * sum(np.sum(np.abs(l.W.data)) for l in self.layers)
         return 0.0
 
-    # ------------------------------------------------------------------
-    # Forward — membangun computational graph
-    # ------------------------------------------------------------------
-
+    # forward, membangun computational graph
     def forward(self, X: np.ndarray) -> Tensor:
-        """
-        Jalankan forward pass.
-        Input X (numpy) dikonversi ke Tensor tanpa grad (data saja).
-        Hasilnya adalah Tensor yang sudah terhubung ke W dan b tiap layer.
-        """
         A = Tensor(X)           # input: tidak perlu grad
         for layer in self.layers:
             A = layer.forward(A)
         return A                 # Tensor output
 
-    # ------------------------------------------------------------------
-    # Zero grad — wajib dipanggil sebelum tiap batch
-    # ------------------------------------------------------------------
-
+    # zero grad — wajib dipanggil sebelum tiap batch
     def zero_grad(self):
         """Reset semua gradien W dan b ke nol."""
         for layer in self.layers:
             layer.zero_grad()
 
-    # ------------------------------------------------------------------
-    # Backward — autograd menyebarkan gradien ke seluruh graph
-    # ------------------------------------------------------------------
 
+    # backward — autograd menyebarkan gradien ke seluruh graph
     def backward(self, y_pred: Tensor, y_true: np.ndarray):
-        """
-        Hitung loss, lalu panggil loss.backward().
-        Autograd akan menyebarkan gradien secara otomatis ke semua W dan b.
-
-        Jika layer output adalah Softmax+CCE, kita inject gradien fused
-        (ŷ - y)/batch langsung ke _Z output layer sebelum backward mengalir ke W.
-        """
         loss_tensor = self.loss_fn.forward(y_pred, y_true)
 
         if self.layers[-1].is_softmax_output:
@@ -111,40 +76,17 @@ class FFNN:
         return loss_tensor
 
     def _backprop_from_z(self, from_layer_idx: int):
-        """
-        Untuk mode fused softmax+CCE: gradien sudah di-inject ke _Z
-        pada layer from_layer_idx. Kita perlu mengalirkan gradien ini
-        ke W, b, dan ke input layer (dA_prev), lalu teruskan ke layer
-        sebelumnya melalui autograd.
-        """
         for i in range(from_layer_idx, -1, -1):
             layer = self.layers[i]
             dZ = layer._Z.grad           # sudah diisi (fused inject atau dari layer di atas)
             X  = layer._Z._prev          # Tensor input ke layer ini
-
-            # Ambil X (input layer) — ia adalah _A dari layer sebelumnya atau input asli
-            # Kita cari node X dari graph _Z
-            # Struktur: _Z = X.matmul(W) + b
-            # _Z._prev = {add_node}  → add_node._prev = {matmul_node, b}
-            # matmul_node._prev = {X_tensor, W}
-            # Kita trigger _backward() pada sub-graph ini secara manual
-            # dengan mendelegasikan ke topological backward dari _Z ke W dan b saja.
             if dZ is None:
                 continue
 
-            # Hitung dW, db dari dZ
-            # Dapatkan X (input ke layer) dari graph matmul
-            # _Z berasal dari: add(matmul(X, W), b)
-            # Jalankan backward sub-graph dari _Z
             layer._Z._ensure_grad()
             self._backward_subgraph(layer._Z, stop_at_inputs=True)
 
     def _backward_subgraph(self, root_tensor, stop_at_inputs=True):
-        """
-        Jalankan topological backward hanya untuk sub-graph dari root_tensor.
-        Ini dipanggil untuk mode fused softmax+CCE setelah gradien diinjeksi
-        ke _Z layer output.
-        """
         topo    = []
         visited = set()
 
@@ -159,83 +101,83 @@ class FFNN:
         for v in reversed(topo):
             v._backward()
 
-    # ------------------------------------------------------------------
     # Update bobot
-    # ------------------------------------------------------------------
-
-    def update_weights(self):
+    def update_weights(self, lr, regularization="none", lambda_=0.0):
+        # Update semua parameter di tiap layer
         for layer in self.layers:
-            layer.update(self.lr, self.regularization, self.lambda_)
+            layer.update(lr, regularization, lambda_)
 
-    # ------------------------------------------------------------------
-    # Training loop
-    # ------------------------------------------------------------------
+    def zero_grad(self):
+        # Bersihin gradien sebelum forward/backward baru
+        for layer in self.layers:
+            layer.zero_grad()
 
     def fit(
         self,
-        X: np.ndarray,
-        y: np.ndarray,
-        epochs: int = 100,
-        batch_size: int = 32,
-        X_val: np.ndarray = None,
-        y_val: np.ndarray = None,
-        verbose: int = 1,
-    ) -> dict:
+        X,
+        y,
+        epochs=100,
+        batch_size=32,
+        X_val=None,
+        y_val=None,
+        lr=0.01,
+        regularization="none",
+        lambda_=0.0,
+        verbose=1,
+    ):
         self.history = {"train_loss": [], "val_loss": []}
-        n = X.shape[0]
+        n_samples = X.shape[0]
 
-        for epoch in range(1, epochs + 1):
-            idx = np.random.permutation(n)
-            Xs, ys = X[idx], y[idx]
-            batch_losses = []
+        for epoch in range(epochs):
+            # Shuffle data biar variatif tiap epoch
+            indices = np.random.permutation(n_samples)
+            Xs, ys = X[indices], y[indices]
 
-            for start in range(0, n, batch_size):
-                Xb, yb = Xs[start: start + batch_size], ys[start: start + batch_size]
+            epoch_losses = []
 
-                # 1. Reset semua gradien (penting! agar tidak akumulasi antar batch)
+            # Training per batch
+            for i in range(0, n_samples, batch_size):
+                Xb, yb = Xs[i : i + batch_size], ys[i : i + batch_size]
+
+                # Reset gradien
                 self.zero_grad()
 
-                # 2. Forward — bangun computational graph
+                # Forward
                 y_pred = self.forward(Xb)
 
-                # 3. Backward — autograd menyebarkan gradien
-                loss_tensor = self.backward(y_pred, yb)
+                # Loss buat dipantau (pake data aja, gak butuh graph di sini)
+                # Tujuannya biar history gak numpuk memori graph
+                loss_val = float(self.loss_fn.forward(y_pred, yb).data.sum())
+                epoch_losses.append(loss_val)
 
-                # 4. Update bobot menggunakan gradien dari Tensor.grad
-                self.update_weights()
+                # Backward (ini yg build graph & itung grad)
+                self.backward(y_pred, yb)
 
-                batch_losses.append(float(loss_tensor.data.flat[0]))
+                # Update bobot
+                self.update_weights(lr, regularization, lambda_)
 
-            train_loss = float(np.mean(batch_losses)) + self._reg_penalty()
-            self.history["train_loss"].append(train_loss)
+            avg_train_loss = np.mean(epoch_losses)
+            self.history["train_loss"].append(avg_train_loss)
 
+            # Validasi kalo ada
+            val_msg = ""
             if X_val is not None and y_val is not None:
-                with_no_grad = self.forward(X_val)
-                val_loss_t   = self.loss_fn.forward(with_no_grad, y_val)
-                self.history["val_loss"].append(
-                    float(val_loss_t.data.flat[0]) + self._reg_penalty()
-                )
+                y_val_pred = self.forward(X_val)
+                avg_val_loss = float(self.loss_fn.forward(y_val_pred, y_val).data.sum())
+                self.history["val_loss"].append(avg_val_loss)
+                val_msg = f", Val Loss: {avg_val_loss:.4f}"
 
-            if verbose and epoch % verbose == 0:
-                msg = f"Epoch {epoch:>4}/{epochs}  loss: {train_loss:.6f}"
-                if self.history["val_loss"]:
-                    msg += f"  val_loss: {self.history['val_loss'][-1]:.6f}"
-                print(msg)
+            if verbose and (epoch + 1) % 10 == 0:
+                print(f"Epoch {epoch+1}/{epochs}, Train Loss: {avg_train_loss:.4f}{val_msg}")
 
         return self.history
 
-    # ------------------------------------------------------------------
     # Predict
-    # ------------------------------------------------------------------
-
     def predict(self, X: np.ndarray) -> np.ndarray:
         """Kembalikan numpy array (bukan Tensor)."""
         return self.forward(X).data
 
-    # ------------------------------------------------------------------
     # Save / Load
-    # ------------------------------------------------------------------
-
     def save(self, filepath: str):
         arrays = {}
         for i, layer in enumerate(self.layers):
@@ -272,10 +214,7 @@ class FFNN:
         print(f"Model loaded = '{filepath}'")
         return model
 
-    # ------------------------------------------------------------------
     # Summary
-    # ------------------------------------------------------------------
-
     def summary(self):
         total = 0
         for i, layer in enumerate(self.layers):

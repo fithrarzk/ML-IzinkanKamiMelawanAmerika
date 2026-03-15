@@ -1,35 +1,7 @@
-"""
-autograd.py — Mesin Automatic Differentiation
-
-Terdiri dari dua lapisan:
-  1. Value  — scalar autograd engine (ala micrograd Karpathy)
-  2. Tensor — wrapper array numpy untuk operasi batched yang efisien
-
-Cara kerja:
-  - Setiap operasi forward membungkus hasilnya dalam Value/Tensor baru.
-  - Setiap Value/Tensor menyimpan referensi ke "parent" nodes (_prev)
-    dan sebuah fungsi _backward() yang mengimplementasikan chain rule
-    untuk operasi tersebut.
-  - Memanggil loss.backward() menjalankan topological sort pada
-    computational graph, lalu mengakumulasikan gradien semua node
-    secara otomatis — tanpa perlu menulis rumus turunan secara eksplisit.
-
-Referensi: https://github.com/karpathy/micrograd
-"""
-
 import numpy as np
 
-
-# =============================================================================
-# Bagian 1: Value — scalar autograd engine
-# =============================================================================
-
+# Class Value ini buat handle autograd per skalar, mirip micrograd gitu
 class Value:
-    """
-    Menyimpan sebuah nilai skalar dan gradiennya.
-    Setiap operasi membangun computational graph secara otomatis.
-    """
-
     def __init__(self, data, _children=(), _op=""):
         self.data = float(data)
         self.grad = 0.0
@@ -37,10 +9,7 @@ class Value:
         self._prev = set(_children)
         self._op = _op
 
-    # ------------------------------------------------------------------
-    # Operator aritmetika (membangun graph)
-    # ------------------------------------------------------------------
-
+    # Operator dasar buat build graph
     def __add__(self, other):
         other = other if isinstance(other, Value) else Value(other)
         out = Value(self.data + other.data, (self, other), "+")
@@ -64,7 +33,7 @@ class Value:
         return out
 
     def __pow__(self, other):
-        assert isinstance(other, (int, float)), "Pangkat hanya mendukung int/float"
+        assert isinstance(other, (int, float)), "Cuma dukung int/float buat pangkat"
         out = Value(self.data ** other, (self,), f"**{other}")
 
         def _backward():
@@ -94,10 +63,7 @@ class Value:
     def __rtruediv__(self, other):
         return Value(other) * self ** -1
 
-    # ------------------------------------------------------------------
-    # Fungsi matematika
-    # ------------------------------------------------------------------
-
+    # Fungsi-fungsi math
     def exp(self):
         val = np.exp(self.data)
         out = Value(val, (self,), "exp")
@@ -149,19 +115,12 @@ class Value:
         out._backward = _backward
         return out
 
-    # ------------------------------------------------------------------
-    # Backward — topological sort + propagasi gradien
-    # ------------------------------------------------------------------
-
+    # Fungsi utama buat jalanin backprop
     def backward(self):
-        """
-        Propagasi gradien dari node ini ke semua node di graph.
-        Menggunakan topological sort agar setiap node diproses
-        setelah semua penggunanya (parents) selesai.
-        """
         topo = []
         visited = set()
 
+        # Urutin node-node nya (topological sort)
         def build_topo(v):
             if id(v) not in visited:
                 visited.add(id(v))
@@ -176,7 +135,6 @@ class Value:
             v._backward()
 
     def zero_grad(self):
-        """Reset gradien ke 0."""
         topo = []
         visited = set()
 
@@ -195,27 +153,15 @@ class Value:
         return f"Value(data={self.data:.4g}, grad={self.grad:.4g})"
 
 
-# =============================================================================
-# Bagian 2: Tensor — batched numpy autograd wrapper
-# =============================================================================
-
+# Tensor ini bwt handle array numpy, biar lebih kenceng lewat batched operations
 class Tensor:
-    """
-    Wrapper numpy array yang membangun computational graph untuk operasi
-    batched (matmul, element-wise, reduction). Digunakan oleh DenseLayer,
-    activations, dan losses.
-
-    Prinsip kerjanya sama dengan Value:
-      - Setiap operasi menghasilkan Tensor baru yang menyimpan _backward()
-      - loss.backward() menyebarkan gradien ke semua parameter (W, b)
-    """
-
     def __init__(self, data, requires_grad=False, _children=(), _op=""):
         if isinstance(data, np.ndarray):
             self.data = data.astype(np.float64)
         else:
             self.data = np.array(data, dtype=np.float64)
 
+        # Cek kalo ada child yang butuh grad, berarti parent nya juga butuh
         self.requires_grad = requires_grad or any(
             getattr(child, 'requires_grad', False) for child in _children
         )
@@ -224,26 +170,13 @@ class Tensor:
         self._prev = set(_children)
         self._op = _op
 
-    # ------------------------------------------------------------------
-    # Helper internal
-    # ------------------------------------------------------------------
-
+    # Pastiin grad ada (buat node tengah/intermediate)
     def _ensure_grad(self):
-        """Pastikan .grad terinisialisasi (untuk node intermediate)."""
         if self.grad is None:
             self.grad = np.zeros_like(self.data)
 
-    # ------------------------------------------------------------------
-    # Linear algebra
-    # ------------------------------------------------------------------
-
+    # Operasi matriks
     def matmul(self, other):
-        """
-        self @ other  (batched matrix multiply)
-        Backward: chain rule matmul
-          d_self  = out.grad @ other.data.T
-          d_other = self.data.T @ out.grad
-        """
         assert isinstance(other, Tensor)
         out = Tensor(self.data @ other.data, _children=(self, other), _op="matmul")
 
@@ -260,10 +193,6 @@ class Tensor:
         return out
 
     def __add__(self, other):
-        """
-        element-wise add.
-        Mendukung Tensor + Tensor (broadcasting untuk bias: (batch,out) + (1,out))
-        """
         if isinstance(other, (int, float)):
             other = Tensor(np.full_like(self.data, other))
         assert isinstance(other, Tensor)
@@ -273,7 +202,7 @@ class Tensor:
             out._ensure_grad()
             if self.requires_grad:
                 self._ensure_grad()
-                # sum over axes yang di-broadcast
+                # Handle broadcasting kalo shape nya beda
                 grad = out.grad
                 while grad.ndim > self.data.ndim:
                     grad = grad.sum(axis=0)
@@ -322,7 +251,6 @@ class Tensor:
         return out
 
     def __mul__(self, other):
-        """element-wise multiply"""
         if isinstance(other, (int, float)):
             other = Tensor(np.full_like(self.data, other))
         assert isinstance(other, Tensor)
@@ -361,10 +289,7 @@ class Tensor:
         out._backward = _backward
         return out
 
-    # ------------------------------------------------------------------
-    # Element-wise math ops (activation functions)
-    # ------------------------------------------------------------------
-
+    # Fungsi aktivasi (element-wise)
     def exp(self):
         val = np.exp(np.clip(self.data, -500, 500))
         out = Tensor(val, _children=(self,), _op="exp")
@@ -432,12 +357,7 @@ class Tensor:
         return out
 
     def softmax(self):
-        """
-        Softmax row-wise. Backward dikombinasikan dengan CCE loss
-        menjadi (y_pred - y_true) / batch, sehingga tidak perlu
-        Jacobian penuh (optimisasi seperti PyTorch).
-        Catatan: backward ini hanya digunakan jika softmax berdiri sendiri.
-        """
+        # Softmax baris-per-baris
         e = np.exp(self.data - np.max(self.data, axis=1, keepdims=True))
         val = e / e.sum(axis=1, keepdims=True)
         out = Tensor(val, _children=(self,), _op="softmax")
@@ -446,7 +366,6 @@ class Tensor:
             out._ensure_grad()
             if self.requires_grad:
                 self._ensure_grad()
-                # Jacobian-vector product: dL/dZ = S*(dL/dA - sum(dL/dA * S, keepdim))
                 s = val
                 dot = np.sum(out.grad * s, axis=1, keepdims=True)
                 self.grad += s * (out.grad - dot)
@@ -454,10 +373,7 @@ class Tensor:
         out._backward = _backward
         return out
 
-    # ------------------------------------------------------------------
     # Reduction ops
-    # ------------------------------------------------------------------
-
     def sum(self, axis=None, keepdims=False):
         val = self.data.sum(axis=axis, keepdims=keepdims)
         out = Tensor(val, _children=(self,), _op="sum")
@@ -478,15 +394,8 @@ class Tensor:
         n = self.data.size if axis is None else self.data.shape[axis]
         return self.sum(axis=axis, keepdims=keepdims) * (1.0 / n)
 
-    # ------------------------------------------------------------------
-    # Backward — topological sort dan propagasi gradien
-    # ------------------------------------------------------------------
-
+    # Topological sort bwt backward tensor
     def backward(self):
-        """
-        Propagasi gradien dari node ini (biasanya loss scalar)
-        ke semua node yang terlibat dalam computational graph.
-        """
         topo = []
         visited = set()
 
@@ -499,7 +408,7 @@ class Tensor:
 
         build_topo(self)
 
-        # Seed: gradien output (loss scalar) adalah 1.0
+        # Start gradient pake matrix angka 1
         self._ensure_grad()
         self.grad = np.ones_like(self.data)
 
@@ -507,13 +416,8 @@ class Tensor:
             v._backward()
 
     def zero_grad(self):
-        """Reset gradien node ini ke nol."""
         if self.grad is not None:
             self.grad = np.zeros_like(self.data)
-
-    # ------------------------------------------------------------------
-    # Properties
-    # ------------------------------------------------------------------
 
     @property
     def shape(self):
@@ -521,7 +425,6 @@ class Tensor:
 
     @property
     def T(self):
-        """Transpose — tidak membuat node graph (hanya view)."""
         return Tensor(self.data.T, requires_grad=self.requires_grad)
 
     def __repr__(self):
