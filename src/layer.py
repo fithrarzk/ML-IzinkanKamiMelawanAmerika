@@ -40,9 +40,21 @@ class DenseLayer:
             rng    = np.random.default_rng(kw.get("seed"))
             W_data = rng.normal(kw.get("mean", 0), kw.get("std", 1), (self.n_in, self.n_out))
             b_data = rng.normal(kw.get("mean", 0), kw.get("std", 1), (1, self.n_out))
+        elif method == "xavier":
+            # Xavier/Glorot Initialization (V = 2 / (n_in + n_out))
+            rng    = np.random.default_rng(kw.get("seed"))
+            std    = np.sqrt(2.0 / (self.n_in + self.n_out))
+            W_data = rng.normal(0, std, (self.n_in, self.n_out))
+            b_data = np.zeros((1, self.n_out)) # bias nol biasanya kalau xavier
+        elif method == "he":
+            # He Initialization (V = 2 / n_in)
+            rng    = np.random.default_rng(kw.get("seed"))
+            std    = np.sqrt(2.0 / self.n_in)
+            W_data = rng.normal(0, std, (self.n_in, self.n_out))
+            b_data = np.zeros((1, self.n_out)) # bias nol biasanya kalau He
         else:
             raise ValueError(
-                f"Gak tau cara init '{method}'. Coba: zero | random_uniform | random_normal"
+                f"Gak tau cara init '{method}'. Coba: zero | random_uniform | random_normal | xavier | he"
             )
 
         # Isi data ke Tensor
