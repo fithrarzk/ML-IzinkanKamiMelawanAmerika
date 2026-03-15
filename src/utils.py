@@ -1,7 +1,12 @@
 import numpy as np
-import matplotlib.pyplot as plt
 
+from autograd import Tensor
 from ffnn import FFNN
+
+def _get_plt():
+    """Lazy-import matplotlib so the module can be imported without it."""
+    import matplotlib.pyplot as plt
+    return plt
 
 
 def _stats(arr: np.ndarray) -> dict:
@@ -18,31 +23,38 @@ def _stats(arr: np.ndarray) -> dict:
 
 
 def get_weight_stats(model) -> dict:
-    return {i: _stats(layer.W) for i, layer in enumerate(model.layers)}
+    return {i: _stats(layer.W.data) for i, layer in enumerate(model.layers)}
 
 
 def get_gradient_stats(model) -> dict:
-    return {i: _stats(layer.dW) for i, layer in enumerate(model.layers)}
+    return {i: _stats(layer.W.grad if layer.W.grad is not None else np.zeros_like(layer.W.data))
+            for i, layer in enumerate(model.layers)}
 
 
 def numerical_gradient(
     model, X: np.ndarray, y: np.ndarray, layer_idx: int, eps: float = 1e-5
 ) -> np.ndarray:
+    """
+    Hitung gradien numerik dengan finite differences.
+    Digunakan untuk verifikasi bahwa gradien autograd sudah benar.
+    """
     layer = model.layers[layer_idx]
-    W = layer.W
-    grad = np.zeros_like(W)
+    W     = layer.W.data          # akses numpy array di dalam Tensor
+    grad  = np.zeros_like(W)
 
     it = np.nditer(W, flags=["multi_index"])
     while not it.finished:
         idx = it.multi_index
 
         W[idx] += eps
-        loss_plus = model.loss_fn.forward(model.forward(X), y)
+        out_plus = model.forward(X)
+        loss_plus = float(model.loss_fn.forward(out_plus, y).data.flat[0])
 
         W[idx] -= 2 * eps
-        loss_minus = model.loss_fn.forward(model.forward(X), y)
+        out_minus = model.forward(X)
+        loss_minus = float(model.loss_fn.forward(out_minus, y).data.flat[0])
 
-        W[idx] += eps
+        W[idx] += eps           # restore
         grad[idx] = (loss_plus - loss_minus) / (2 * eps)
         it.iternext()
 
@@ -228,6 +240,7 @@ def run_learning_rate_experiments(
 def plot_train_val_curves(
     results, title="Training and Validation Loss", zoom_start=None
 ):
+    plt = _get_plt()
     fig, ax = plt.subplots(figsize=(8, 5))
 
     for exp_name, res in results.items():
@@ -245,6 +258,7 @@ def plot_train_val_curves(
 
 
 def plot_prediction_bars(results, title_prefix="Eksperimen"):
+    plt = _get_plt()
     exp_names = list(results.keys())
     test_losses = [results[name]["test_loss"] for name in exp_names]
     test_accs = [results[name]["test_accuracy"] for name in exp_names]
@@ -265,14 +279,15 @@ def plot_prediction_bars(results, title_prefix="Eksperimen"):
 
 
 def extract_layer_weights_and_gradients(model):
-    weights_by_layer = {}
-    gradients_by_layer = {}
+    weights_by_layer    = {}
+    gradients_by_layer  = {}
 
     for i, layer in enumerate(model.layers):
         layer_name = f"Layer {i}"
-        weights_by_layer[layer_name] = layer.W.copy()
-        if hasattr(layer, "dW") and layer.dW is not None:
-            gradients_by_layer[layer_name] = layer.dW.copy()
+        weights_by_layer[layer_name] = layer.W.data.copy()
+        dW = layer.W.grad
+        if dW is not None:
+            gradients_by_layer[layer_name] = dW.copy()
 
     return weights_by_layer, gradients_by_layer
 
@@ -316,6 +331,7 @@ def result_analysis(model_triplet):
 
 
 def result_vis(weights, gradients):
+    plt = _get_plt()
     fig, axes = plt.subplots(len(weights), 2, figsize=(14, 4 * len(weights)))
 
     if len(weights) == 1:
