@@ -1,14 +1,5 @@
-"""
-activations.py — Fungsi aktivasi berbasis Autograd
-
-Setiap activation mengimplementasikan forward() yang menerima Tensor
-dan mengembalikan Tensor. Karena Tensor membangun computational graph
-secara otomatis, tidak ada lagi metode backward() yang ditulis manual
-— gradien akan diturunkan secara otomatis oleh mesin autograd.
-"""
-
+import numpy as np
 from autograd import Tensor
-
 
 class Activation:
     def forward(self, Z: Tensor) -> Tensor:
@@ -17,60 +8,44 @@ class Activation:
     def __call__(self, Z: Tensor) -> Tensor:
         return self.forward(Z)
 
-
 class Linear(Activation):
-    """f(z) = z  →  f'(z) = 1  (ditangani autograd via identity)"""
-
     def forward(self, Z: Tensor) -> Tensor:
-        # Buat node baru dengan _backward yang meneruskan gradien apa adanya
-        import numpy as np
-        out = Tensor(Z.data.copy(), _children=(Z,), _op="linear")
-
-        def _backward():
-            if Z.requires_grad:
-                Z._ensure_grad()
-                Z.grad += out.grad
-
-        out._backward = _backward
-        return out
-
+        # Linear activation: f(z) = z
+        # Cuma diterusin aja angkanya, dikali 1 biar direkam sama autograd graph
+        return Z * 1.0
 
 class ReLU(Activation):
-    """f(z) = max(0, z)  →  autograd via Tensor.relu()"""
-
     def forward(self, Z: Tensor) -> Tensor:
-        return Z.relu()
-
+        # Rumus ReLU: max(0, Z)
+        # akalin pake mask boolean: kalo > 0 jadi 1, sisanya 0
+        import numpy as np
+        mask = Tensor((Z.data > 0).astype(float))
+        return Z * mask
 
 class Sigmoid(Activation):
-    """f(z) = 1/(1+e^-z)  →  autograd via Tensor.sigmoid()"""
-
     def forward(self, Z: Tensor) -> Tensor:
-        return Z.sigmoid()
-
+        # Rumus Sigmoid: 1 / (1 + e^-Z)
+        # Kita pake pangkat -1 karena __rtruediv__ (1.0 / Tensor) belum tentu disupport
+        return (1.0 + (-Z).exp()) ** -1.0
 
 class Tanh(Activation):
-    """f(z) = tanh(z)  →  autograd via Tensor.tanh()"""
-
     def forward(self, Z: Tensor) -> Tensor:
-        return Z.tanh()
-
+        # Rumus Tanh: (e^Z - e^-Z) / (e^Z + e^-Z)
+        # Turunannya bakal diturunin sempurna sama chain rule autograd
+        e_z = Z.exp()
+        e_neg_z = (-Z).exp()
+        return (e_z - e_neg_z) / (e_z + e_neg_z)
 
 class Softmax(Activation):
-    """
-    f(z)_i = exp(z_i) / sum_j(exp(z_j))
-
-    Backward ditangani autograd via Tensor.softmax() yang mengimplementasikan
-    Jacobian-vector product:  dL/dZ = S * (dL/dA - sum(dL/dA * S, axis=1))
-
-    Ketika dipakai bersama CCE loss, FFNN menerapkan optimasi fusi
-    (softmax + CCE backward = y_pred - y_true), seperti yang dilakukan
-    oleh PyTorch (flag is_softmax_output di DenseLayer).
-    """
-
     def forward(self, Z: Tensor) -> Tensor:
-        return Z.softmax()
-
+        # Rumus Softmax: e^Z_i / sum(e^Z)
+        # Kurangin max(Z) dulu biar stabil (gak NaN) pas dihitung exponensialnya
+        import numpy as np
+        z_max = Tensor(np.max(Z.data, axis=1, keepdims=True))
+        e_z = (Z - z_max).exp()
+        
+        # pembagian dan rumusan _sum_ direkam sama autograd jadi _jacobian_ otomatis
+        return e_z / e_z.sum(axis=1, keepdims=True)
 
 ACTIVATIONS = {
     "linear":  Linear,
@@ -80,7 +55,6 @@ ACTIVATIONS = {
     "softmax": Softmax,
 }
 
-
 def get_activation(name):
     if isinstance(name, Activation):
         return name
@@ -88,5 +62,5 @@ def get_activation(name):
         return ACTIVATIONS[name.lower()]()
     except KeyError:
         raise ValueError(
-            f"Unknown activation '{name}'. Choose from {list(ACTIVATIONS)}"
+            f"Gak kenal aktivasi '{name}'. Coba: {list(ACTIVATIONS)}"
         )
