@@ -43,12 +43,30 @@ class Softmax(Activation):
         z_max = Tensor(np.max(Z.data, axis=1, keepdims=True))
         e_z = (Z - z_max).exp()
         
-        # pembagian dan rumusan _sum_ direkam sama autograd jadi _jacobian_ otomatis
+        # pembagian dan rumusan sum direkam sama autograd jadi jacobian otomatis
         return e_z / e_z.sum(axis=1, keepdims=True)
+
+class LeakyReLU(Activation):
+    def __init__(self, alpha=0.01):
+        self.alpha = alpha
+
+    def forward(self, Z: Tensor) -> Tensor:
+        # Rumus Leaky ReLU: Z kalo Z > 0, alpha * Z kalo Z <= 0
+        return Z.leaky_relu(alpha=self.alpha)
+
+class ELU(Activation):
+    def __init__(self, alpha=1.0):
+        self.alpha = alpha
+
+    def forward(self, Z: Tensor) -> Tensor:
+        # Rumus ELU: Z kalo Z > 0, alpha * (e^Z - 1) kalo Z <= 0
+        return Z.elu(alpha=self.alpha)
 
 ACTIVATIONS = {
     "linear":  Linear,
     "relu":    ReLU,
+    "leaky_relu": LeakyReLU,
+    "elu":     ELU,
     "sigmoid": Sigmoid,
     "tanh":    Tanh,
     "softmax": Softmax,
