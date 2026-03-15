@@ -154,7 +154,7 @@ def run_architecture_experiments(
 
         y_prob = model.predict(X_test)
         accuracy = _evaluate_predictions(task, y_prob, y_test)
-        test_loss = float(model.loss_fn.forward(y_prob, y_test))
+        test_loss = float(model.loss_fn.forward(Tensor(y_prob), y_test).data.sum())
 
         results[exp_name] = {
             "model": model,
@@ -220,7 +220,7 @@ def run_learning_rate_experiments(
 
         y_prob = model.predict(X_test)
         accuracy = _evaluate_predictions(task, y_prob, y_test)
-        test_loss = float(model.loss_fn.forward(y_prob, y_test))
+        test_loss = float(model.loss_fn.forward(Tensor(y_prob), y_test).data.sum())
 
         results[exp_name] = {
             "model": model,
