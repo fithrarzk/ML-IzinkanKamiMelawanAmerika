@@ -246,6 +246,7 @@ class Tensor:
         out = Tensor(self.data @ other.data, _children=(self, other), _op="matmul")
 
         def _backward():
+            out._ensure_grad()
             if self.requires_grad:
                 self._ensure_grad()
                 self.grad += out.grad @ other.data.T
@@ -267,6 +268,7 @@ class Tensor:
         out = Tensor(self.data + other.data, _children=(self, other), _op="+")
 
         def _backward():
+            out._ensure_grad()
             if self.requires_grad:
                 self._ensure_grad()
                 # sum over axes yang di-broadcast
@@ -309,6 +311,7 @@ class Tensor:
         out = Tensor(-self.data, _children=(self,), _op="neg")
 
         def _backward():
+            out._ensure_grad()
             if self.requires_grad:
                 self._ensure_grad()
                 self.grad += -out.grad
@@ -324,6 +327,7 @@ class Tensor:
         out = Tensor(self.data * other.data, _children=(self, other), _op="*")
 
         def _backward():
+            out._ensure_grad()
             if self.requires_grad:
                 self._ensure_grad()
                 self.grad += other.data * out.grad
@@ -347,6 +351,7 @@ class Tensor:
         out = Tensor(self.data ** exp, _children=(self,), _op=f"**{exp}")
 
         def _backward():
+            out._ensure_grad()
             if self.requires_grad:
                 self._ensure_grad()
                 self.grad += exp * (self.data ** (exp - 1)) * out.grad
@@ -363,6 +368,7 @@ class Tensor:
         out = Tensor(val, _children=(self,), _op="exp")
 
         def _backward():
+            out._ensure_grad()
             if self.requires_grad:
                 self._ensure_grad()
                 self.grad += val * out.grad
@@ -376,6 +382,7 @@ class Tensor:
         out = Tensor(val, _children=(self,), _op="log")
 
         def _backward():
+            out._ensure_grad()
             if self.requires_grad:
                 self._ensure_grad()
                 self.grad += (1.0 / np.clip(self.data, eps, None)) * out.grad
@@ -388,6 +395,7 @@ class Tensor:
         out = Tensor(self.data * mask, _children=(self,), _op="relu")
 
         def _backward():
+            out._ensure_grad()
             if self.requires_grad:
                 self._ensure_grad()
                 self.grad += mask * out.grad
@@ -400,6 +408,7 @@ class Tensor:
         out = Tensor(val, _children=(self,), _op="tanh")
 
         def _backward():
+            out._ensure_grad()
             if self.requires_grad:
                 self._ensure_grad()
                 self.grad += (1 - val ** 2) * out.grad
@@ -412,6 +421,7 @@ class Tensor:
         out = Tensor(val, _children=(self,), _op="sigmoid")
 
         def _backward():
+            out._ensure_grad()
             if self.requires_grad:
                 self._ensure_grad()
                 self.grad += val * (1 - val) * out.grad
@@ -431,6 +441,7 @@ class Tensor:
         out = Tensor(val, _children=(self,), _op="softmax")
 
         def _backward():
+            out._ensure_grad()
             if self.requires_grad:
                 self._ensure_grad()
                 # Jacobian-vector product: dL/dZ = S*(dL/dA - sum(dL/dA * S, keepdim))
@@ -450,12 +461,13 @@ class Tensor:
         out = Tensor(val, _children=(self,), _op="sum")
 
         def _backward():
+            out._ensure_grad()
             if self.requires_grad:
                 self._ensure_grad()
                 grad = out.grad
                 if axis is not None and not keepdims:
                     grad = np.expand_dims(grad, axis=axis)
-                self.grad += np.broadcast_to(grad, self.data.shape)
+                self.grad += np.broadcast_to(grad, self.data.shape).copy()
 
         out._backward = _backward
         return out
