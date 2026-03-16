@@ -24,6 +24,13 @@ class DenseLayer:
         # Referensi buat bantu backward kalo pake softmax fusi
         self._A = None
         self._Z = None
+        
+        # State khusus Adam
+        self.m_W = np.zeros_like(self.W.data)
+        self.v_W = np.zeros_like(self.W.data)
+        self.m_b = np.zeros_like(self.b.data)
+        self.v_b = np.zeros_like(self.b.data)
+        self.t_adam = 0
 
         self._init_weights(init_method, **(init_params or {}))
 
@@ -76,15 +83,33 @@ class DenseLayer:
         self._Z._ensure_grad()
         self._Z.grad += fused_grad
 
-    def update(self, lr, regularization="none", lambda_=0.0):
+    def update(self, lr, regularization="none", lambda_=0.0, optimizer="sgd", beta1=0.9, beta2=0.999, epsilon=1e-8):
         # Update pake gradien yang udh diitung autograd
         reg = regularization.lower()
         if   reg == "l2": reg_term = lambda_ * self.W.data
         elif reg == "l1": reg_term = lambda_ * np.sign(self.W.data)
         else:             reg_term = 0.0
 
-        self.W.data -= lr * (self.W.grad + reg_term)
-        self.b.data -= lr * self.b.grad
+        grad_W = self.W.grad + reg_term
+        grad_b = self.b.grad
+
+        if optimizer.lower() == "adam":
+            self.t_adam += 1
+            
+            self.m_W = beta1 * self.m_W + (1 - beta1) * grad_W
+            self.v_W = beta2 * self.v_W + (1 - beta2) * (grad_W ** 2)
+            m_hat_W = self.m_W / (1 - beta1 ** self.t_adam)
+            v_hat_W = self.v_W / (1 - beta2 ** self.t_adam)
+            self.W.data -= lr * m_hat_W / (np.sqrt(v_hat_W) + epsilon)
+            
+            self.m_b = beta1 * self.m_b + (1 - beta1) * grad_b
+            self.v_b = beta2 * self.v_b + (1 - beta2) * (grad_b ** 2)
+            m_hat_b = self.m_b / (1 - beta1 ** self.t_adam)
+            v_hat_b = self.v_b / (1 - beta2 ** self.t_adam)
+            self.b.data -= lr * m_hat_b / (np.sqrt(v_hat_b) + epsilon)
+        else:
+            self.W.data -= lr * grad_W
+            self.b.data -= lr * grad_b
 
     def zero_grad(self):
         # Bersihin gradien sblm batch baru
