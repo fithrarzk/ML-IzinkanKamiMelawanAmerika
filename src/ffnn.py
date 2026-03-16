@@ -24,11 +24,15 @@ class FFNN:
         self.lambda_      = 0.0
         self.history      = {"train_loss": [], "val_loss": []}
 
-    def compile(self, loss="mse", lr=0.01, regularization="none", lambda_=0.0):
+    def compile(self, loss="mse", lr=0.01, regularization="none", lambda_=0.0, optimizer="sgd", beta1=0.9, beta2=0.999, epsilon=1e-8):
         self.loss_fn        = get_loss(loss)
         self.lr             = lr
         self.regularization = regularization
         self.lambda_        = lambda_
+        self.optimizer      = optimizer
+        self.beta1          = beta1
+        self.beta2          = beta2
+        self.epsilon        = epsilon
 
         # Tandai layer output jika merupakan Softmax + CCE (fused backward)
         last     = self.layers[-1]
@@ -102,10 +106,10 @@ class FFNN:
             v._backward()
 
     # Update bobot
-    def update_weights(self, lr, regularization="none", lambda_=0.0):
+    def update_weights(self, lr, regularization="none", lambda_=0.0, optimizer="sgd", beta1=0.9, beta2=0.999, epsilon=1e-8):
         # Update semua parameter di tiap layer
         for layer in self.layers:
-            layer.update(lr, regularization, lambda_)
+            layer.update(lr, regularization, lambda_, optimizer, beta1, beta2, epsilon)
 
     def zero_grad(self):
         # Bersihin gradien sebelum forward/backward baru
@@ -123,6 +127,10 @@ class FFNN:
         lr=0.01,
         regularization="none",
         lambda_=0.0,
+        optimizer="sgd",
+        beta1=0.9,
+        beta2=0.999,
+        epsilon=1e-8,
         verbose=1,
     ):
         self.history = {"train_loss": [], "val_loss": []}
@@ -154,7 +162,7 @@ class FFNN:
                 self.backward(y_pred, yb)
 
                 # Update bobot
-                self.update_weights(lr, regularization, lambda_)
+                self.update_weights(lr, regularization, lambda_, optimizer, beta1, beta2, epsilon)
 
             avg_train_loss = np.mean(epoch_losses)
             self.history["train_loss"].append(avg_train_loss)
