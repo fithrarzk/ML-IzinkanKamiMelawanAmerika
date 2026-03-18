@@ -63,12 +63,20 @@ Seluruh eksperimen yang mencakup pra-pemrosesan data, pelatihan model (*training
 3. Pada antarmuka peramban (*browser*) yang terbuka, navigasikan ke direktori `src/notebooks/` dan buka file `experiment.ipynb`.
 4. Untuk melihat seluruh hasil dari awal hingga akhir, klik menu **Kernel** -> **Restart & Run All** (atau jalankan setiap *cell* secara berurutan dari atas ke bawah).
 
+## 🏆 Bonus yang Dikerjakan (90/100 Poin)
+Kami telah berhasil mengimplementasikan dan menguji mayoritas fitur bonus yang diminta pada spesifikasi:
+- **Automatic Differentiation / Autograd (40 Poin):** Implementasi komputasi graf terarah berbasis manipulasi *Node/Tensor* (`src/autograd.py`) untuk perhitungan turunan secara matematis dan otomatis, sehingga perhitungan gradien pada saat *backward pass* tidak lagi di-hardcode.
+- **Adam Optimizer (40 Poin):** Implementasi optimasi *Adaptive Moment Estimation* lengkap dengan pencatatan momentum ($m_t$), RMSProp ($v_t$), parameter waktu ($t$), serta fitur koreksi bias (*bias correction*). Eksekusi dan perbandingan konvergensi Adam vs SGD tersedia di bagian akhir *notebook*.
+- **Custom Activations (5 Poin):** Penyediaan opsi fungsi aktivasi tambahan, yaitu *Leaky ReLU* dan *ELU (Exponential Linear Unit)*.
+- **Custom Initializations (5 Poin):** Penyediaan fungsi inisialisasi bobot tingkat lanjut yaitu *Xavier/Glorot Initialization* dan *He Initialization*.
+*(Catatan: Implementasi RMSNorm dilewati/tidak dikerjakan).*
+
 ## 👥 Pembagian Tugas
 
 Proyek ini dikembangkan oleh kelompok dengan rincian kontribusi sebagai berikut:
 
 | Nama Lengkap | NIM | Peran & Deskripsi Tugas | Kontribusi |
 | :--- | :--- | :--- | :---: |
-| **Raka Daffa Iftikhaar** | `13523018` | isi | **33%** |
-| **Muhammad Fithra Rizki** | `13523049` | isi | **33%** |
-| **Muhammad Timur Kanigara** | `13523055` | isi | **34%** |
+| **Raka Daffa Iftikhaar** | `13523018` | Menyiapkan dataset Global Student Placement & Salary, termasuk penanganan fitur kategorikal menjadi numerik, membuat fungsi pelatihan yang mendukung parameter Batch Size, Learning Rate, Epoch, dan fitur Verbose (progress bar), mengimplementasikan berbagai metode inisialisasi bobot (Zero, Uniform, Normal) serta fungsi save dan load model, membuat method untuk menampilkan plot distribusi bobot, distribusi gradien, serta grafik training vs validation loss, mengimplementasi Xavier dan He initialization, menyusun laporan | **33%** |
+| **Muhammad Fithra Rizki** | `13523049` | Menyusun kelas utama FFNN, mengimplementasikan Linear, ReLU, Sigmoid, Tanh, dan Softmax beserta turunannya, mengimplementasikan alur forward dan perhitungan gradien menggunakan chain rule (backward) untuk data batch, mengimplementasikan Gradient Descent standar dan mekanisme regularisasi L1/L2, mengerjakan bonus automatic differentiation, mengimplementasi 2 fitur aktivasi lain (LeakyReLU dan ELU) | **34%** |
+| **Muhammad Timur Kanigara** | `13523055` | Menjalankan pengujian pengaruh depth/width, fungsi aktivasi, dan learning rate sesuai spesifikasi, membandingkan model tanpa regularisasi vs L1 vs L2, melakukan uji perbandingan hasil prediksi antara model buatan kelompok dengan library sklearn.neural_network.MLPClassifier, menyusun laporan, mengerjakan bonus Adam Optimizer, melakukan analisis tambahan untuk normalisasi RMSNorm | **33%** |
